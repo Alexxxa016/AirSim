@@ -6,18 +6,48 @@ using UnityEngine;
 
 public class airElementScript : MonoBehaviour
 {
-     float density = 1;
+    float density = 1;
     Vector3 velocity, acceleration;
     float smoothingRadius = 3;
     float mass = 1;
     float targetDensity = 1;
+    Vector3 initialPosition;
+    Vector3 boundsMin;
+    Vector3 boundsMax;
+    //float maxSpeed = 0.5f;
+    float[] densities;
+    private float[] particleProperties;
+    private float pressureMultiplier = 1;
 
 
     // Start is called before the first frame update
     void Start()
     {
+        initialPosition = transform.position; // Save the initial position
+        CalculateBounds(); // Calculate the screen boundaries
 
     }
+
+    void CalculateBounds()
+    {
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null)
+        {
+            // Extend the distance from the camera to the boundary
+            float screenDistance = Mathf.Abs(mainCamera.transform.position.z - transform.position.z);
+
+            // Get the frustum's horizontal and vertical size at the particle distance
+            Vector3 centerPoint = mainCamera.ViewportToWorldPoint(new Vector3(0.5f, 0.5f, screenDistance));
+
+            // Set the size of the boundary cube (e.g., a 1-unit cube)
+            float cubeSize = 10.0f;
+
+            boundsMin = centerPoint - new Vector3(cubeSize / 2, cubeSize / 2, cubeSize / 2);
+            boundsMax = centerPoint + new Vector3(cubeSize / 2, cubeSize / 2, cubeSize / 2);
+        }
+    }
+
+
 
     float DensityAt(Vector3 point)
     {
@@ -46,47 +76,6 @@ public class airElementScript : MonoBehaviour
         float scale = -24 / (Mathf.PI * Mathf.Pow(radius, 8));
         return scale * dist * f * f;
     }
-
-    //float CalculateProperty(Vector3 samplePoint)
-    //{
-    //    float property = 0;
-    //    Collider[] allAirElements = Physics.OverlapSphere(samplePoint, smoothingRadius);
-
-    //    foreach (Collider c in allAirElements)
-    //    {
-    //        float dist = (c.transform.position - samplePoint).magnitude;
-    //        float influence = SmoothingKernel(dist, smoothingRadius);
-    //        float density = DensityAt(c.transform.position);
-    //        property += particleProperties[i] * influence * mass / density * influence;
-    //    }
-    //    return property;
-    //}
-
-
-
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="samplePoint"></param>
-    /// <returns></returns>
-    //Vector3 CalculatePropertyGradient(Vector3 samplePoint)
-    //{
-    //    Vector3 propertyGradient = Vector3.zero;
-
-    //    for (int i = 0; i < numParticles; i++)
-    //    {
-    //        float dist = (positions[i] - samplePoint).magnitude;
-    //        Vector3 dir = (positions[i] - samplePoint) / dist;
-    //        float slope = SmoothingKernelDerivative(dist, smoothingRadius);
-    //        float density = densities[i];
-    //        propertyGradient += -particleProperties[i] * dir * slope * mass / density;
-    //    }
-    //    return propertyGradient;
-    //}
-
-    float[] densities;
-    private float[] particleProperties;
-    private float pressureMultiplier = 1;
 
     float ConvertDensityToPressure(float density)
     {
@@ -117,7 +106,8 @@ public class airElementScript : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        print(density);
+
+        //print(density);
 
         acceleration = Vector3.zero; // 9.8f * Vector3.down;
         Vector3 pressureForce = CalculatePressureForce(transform.position);
@@ -132,5 +122,21 @@ public class airElementScript : MonoBehaviour
         velocity += acceleration * Time.deltaTime;
         transform.position += velocity * Time.deltaTime;
         density = DensityAt(transform.position);
+
+        // Boundary collision detection
+        if (transform.position.x < boundsMin.x || transform.position.x > boundsMax.x)
+        {
+            velocity.x = -velocity.x;
+        }
+        if (transform.position.y < boundsMin.y || transform.position.y > boundsMax.y)
+        {
+            velocity.y = -velocity.y;
+        }
+        if (transform.position.z < boundsMin.z || transform.position.z > boundsMax.z)
+        {
+            velocity.z = -velocity.z;
+        }
+
+
     }
 }
