@@ -1,21 +1,22 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 public class airElementScript : MonoBehaviour
 {
-    float density = 0.5f;
-    Vector3 velocity, acceleration;
+    internal float density = 0.5f;
+    internal Vector3 velocity, acceleration;
     float smoothingRadius = 3;
-    float mass = 1;
+    internal float mass = 1;
     float targetDensity = 0.5f;
     Vector3 boundsMin, boundsMax;
-    float pressureMultiplier = 0.5f;
-    float collisionRadius = 0.1f; // Minimum distance to maintain between particles
+    float pressureMultiplier = 1f;
+    float collisionRadius = 0.2f;
+    float edgeRepellingForceStrength = 0.1f;  
+    float attractionStrength = 0.01f;          
+    float repulsionStrength = 0.05f;           
+    float intermolecularDistance = 1.0f;       // Distance at which intermolecular forces
 
-    // Start is called before the first frame update
     internal void Start()
     {
-
         CalculateBounds();
     }
 
@@ -32,6 +33,148 @@ public class airElementScript : MonoBehaviour
         }
     }
 
+    Vector3 CalculatePressureForce()
+    {
+        Vector3 pressureForce = Vector3.zero;
+        Collider[] allAirElements = Physics.OverlapSphere(transform.position, smoothingRadius);
+
+        foreach (Collider c in allAirElements)
+        {
+            if (c.gameObject == gameObject) continue;
+
+            float dist = (c.transform.position - transform.position).magnitude;
+            if (dist > 0)
+            {
+                Vector3 dir = (c.transform.position - transform.position).normalized;
+                float slope = SmoothingKernelDerivative(dist, smoothingRadius);
+                float density = DensityAt(c.transform.position);
+
+                float sharedPressure = CalculateSharedPressure(density, this.density);
+                pressureForce += sharedPressure * dir * slope * mass / density;
+            }
+        }
+        return pressureForce;
+    }
+
+    float CalculateSharedPressure(float densityA, float densityB)
+    {
+        float pressureA = ConvertDensityToPressure(densityA);
+        float pressureB = ConvertDensityToPressure(densityB);
+        return (pressureA + pressureB) / 2;
+    }
+
+    float ConvertDensityToPressure(float density)
+    {
+        float densityError = density - targetDensity;
+        return densityError * pressureMultiplier;
+    }
+
+    float SmoothingKernelDerivative(float dist, float radius)
+    {
+        if (dist >= radius) return 0;
+        float f = radius * radius - dist * dist;
+        return -24 * dist * f * f / (Mathf.PI * Mathf.Pow(radius, 8));
+    }
+
+    void ResolveCollisions()
+    {
+        Collider[] allAirElements = Physics.OverlapSphere(transform.position, collisionRadius);
+        foreach (Collider c in allAirElements)
+        {
+            if (c.gameObject == gameObject) continue;
+
+            float dist = Vector3.Distance(c.transform.position, transform.position);
+            if (dist < collisionRadius)
+            {
+                Vector3 dir = (transform.position - c.transform.position).normalized;
+                float overlap = collisionRadius - dist;
+                transform.position += dir * overlap * 0.5f;
+                airElementScript otherParticle = c.GetComponent<airElementScript>();
+                if (otherParticle != null)
+                {
+                    otherParticle.velocity -= dir * overlap * 0.5f;
+                }
+            }
+        }
+    }
+
+    internal void Update()
+    {
+        acceleration = CalculatePressureForce();
+        velocity += acceleration * Time.deltaTime;
+        transform.position += velocity * Time.deltaTime;
+
+        density = DensityAt(transform.position);
+        ResolveCollisions();
+
+        // Ensure the particle stays within the screen view
+        KeepParticleWithinScreenView();
+        ApplyEdgeRepellingForce();
+        ApplyIntermolecularForces();
+    }
+
+    void KeepParticleWithinScreenView()
+    {
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null)
+        {
+            float screenDistance = Mathf.Abs(mainCamera.transform.position.z - transform.position.z);
+            Vector3 screenMin = mainCamera.ViewportToWorldPoint(new Vector3(0, 0, screenDistance));
+            Vector3 screenMax = mainCamera.ViewportToWorldPoint(new Vector3(1, 1, screenDistance));
+
+            transform.position = new Vector3(
+                Mathf.Clamp(transform.position.x, screenMin.x, screenMax.x),
+                Mathf.Clamp(transform.position.y, screenMin.y, screenMax.y),
+                Mathf.Clamp(transform.position.z, boundsMin.z, boundsMax.z) 
+            );
+        }
+    }
+
+    void ApplyEdgeRepellingForce()
+    {
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null)
+        {
+            float screenDistance = Mathf.Abs(mainCamera.transform.position.z - transform.position.z);
+            Vector3 screenMin = mainCamera.ViewportToWorldPoint(new Vector3(0, 0, screenDistance));
+            Vector3 screenMax = mainCamera.ViewportToWorldPoint(new Vector3(1, 1, screenDistance));
+
+            // Apply repelling force based on proximity to screen edges
+            if (transform.position.x < screenMin.x + 0.1f)
+                velocity.x += edgeRepellingForceStrength;
+            else if (transform.position.x > screenMax.x - 0.1f)
+                velocity.x -= edgeRepellingForceStrength;
+
+            if (transform.position.y < screenMin.y + 0.1f)
+                velocity.y += edgeRepellingForceStrength;
+            else if (transform.position.y > screenMax.y - 0.1f)
+                velocity.y -= edgeRepellingForceStrength;
+        }
+    }
+
+    void ApplyIntermolecularForces()
+    {
+        Collider[] allAirElements = Physics.OverlapSphere(transform.position, smoothingRadius);
+        foreach (Collider col in allAirElements)
+        {
+            if (col.gameObject == gameObject) continue;
+
+            Vector3 direction = col.transform.position - transform.position;
+            float distance = direction.magnitude;
+
+            if (distance < intermolecularDistance)
+            {
+                // Attraction force
+                Vector3 attractionForce = direction.normalized * attractionStrength / (distance * distance);
+                velocity += attractionForce * Time.deltaTime;
+
+                // Repulsion force
+                Vector3 repulsionForce = -direction.normalized * repulsionStrength / (distance * distance);
+                velocity += repulsionForce * Time.deltaTime;
+            }
+        }
+    }
+
     float DensityAt(Vector3 point)
     {
         Collider[] allAirElements = Physics.OverlapSphere(point, smoothingRadius);
@@ -45,138 +188,9 @@ public class airElementScript : MonoBehaviour
         return density;
     }
 
-    private float SmoothingKernel(float smoothingRadius, float dist)
+    float SmoothingKernel(float smoothingRadius, float dist)
     {
-        float volume = Mathf.PI * Mathf.Pow(smoothingRadius, 8) / 4;
-        float val1 = Mathf.Max(0, smoothingRadius * smoothingRadius - dist * dist);
-        return val1 * val1 * val1 / volume;
-    }
-
-    static float SmoothingKernelDerivative(float dist, float radius)
-    {
-        if (dist >= radius) return 0;
-        float f = radius * radius - dist * dist;
-        float scale = -24 / (Mathf.PI * Mathf.Pow(radius, 8));
-        return scale * dist * f * f;
-    }
-
-    float ConvertDensityToPressure(float density)
-    {
-        float densityError = density - targetDensity;
-        float pressure = densityError * pressureMultiplier;
-        return pressure;
-    }
-
-    float CalculateSharedPressure(float densityA, float densityB)
-    {
-        float pressureA = ConvertDensityToPressure(densityA);
-        float pressureB = ConvertDensityToPressure(densityB);
-        return (pressureA + pressureB) / 2;
-    }
-
-    Vector3 CalculatePressureForce()
-    {
-        Vector3 pressureForce = Vector3.zero;
-        Collider[] allAirElements = Physics.OverlapSphere(transform.position, smoothingRadius);
-
-        foreach (Collider c in allAirElements)
-        {
-            if (c.gameObject == gameObject) continue; // Skip self-collision
-
-            float dist = (c.transform.position - transform.position).magnitude;
-            if (dist > 0)
-            {
-                Vector3 dir = (c.transform.position - transform.position) / dist;
-                float slope = SmoothingKernelDerivative(dist, smoothingRadius);
-                float density = DensityAt(c.transform.position);
-
-                float sharedPressure = CalculateSharedPressure(density, this.density);
-                pressureForce += sharedPressure * dir * slope * mass / density;
-            }
-        }
-        return pressureForce;
-    }
-
-    void ResolveCollisions()
-    {
-        Collider[] allAirElements = Physics.OverlapSphere(transform.position, collisionRadius);
-
-        foreach (Collider c in allAirElements)
-        {
-            if (c.gameObject == gameObject) continue; // Skip self-collision
-
-            float dist = Vector3.Distance(c.transform.position, transform.position);
-            if (dist < collisionRadius)
-            {
-                Vector3 dir = (transform.position - c.transform.position).normalized;
-                float overlap = collisionRadius - dist;
-                transform.position += dir * overlap * 0.5f;
-                c.transform.position -= dir * overlap * 0.5f;
-
-                // Adjust velocities to prevent further overlap
-                velocity -= dir * overlap * 0.5f;
-                airElementScript otherParticle = c.GetComponent<airElementScript>();
-                if (otherParticle != null)
-                {
-                    otherParticle.velocity += dir * overlap * 0.5f;
-                }
-            }
-        }
-    }
-
-    // Update is called once per frame
-    internal void Update()
-    {
-        acceleration = Vector3.zero;
-        Vector3 pressureForce = CalculatePressureForce();
-        Vector3 pressureAcceleration;
-        if (density == 0)
-        {
-            pressureAcceleration = Vector3.zero;
-        }
-        else
-        {
-            pressureAcceleration = pressureForce / density;
-        }
-
-        acceleration += pressureAcceleration;
-        velocity += acceleration * Time.deltaTime;
-        transform.position += velocity * Time.deltaTime;
-        density = DensityAt(transform.position);
-
-        // Resolve collisions
-        ResolveCollisions();
-
-        // Non-bouncing boundary collision detection
-        if (transform.position.x < boundsMin.x)
-        {
-            transform.position = new Vector3(boundsMin.x, transform.position.y, transform.position.z);
-            velocity.x = Mathf.Abs(velocity.x); // Apply a gentle force to move it inside
-        }
-        if (transform.position.x > boundsMax.x)
-        {
-            transform.position = new Vector3(boundsMax.x, transform.position.y, transform.position.z);
-            velocity.x = -Mathf.Abs(velocity.x); // Apply a gentle force to move it inside
-        }
-        if (transform.position.y < boundsMin.y)
-        {
-            transform.position = new Vector3(transform.position.x, boundsMin.y, transform.position.z);
-            velocity.y = Mathf.Abs(velocity.y); // Apply a gentle force to move it inside
-        }
-        if (transform.position.y > boundsMax.y)
-        {
-            transform.position = new Vector3(transform.position.x, boundsMax.y, transform.position.z);
-            velocity.y = -Mathf.Abs(velocity.y); // Apply a gentle force to move it inside
-        }
-        if (transform.position.z < boundsMin.z)
-        {
-            transform.position = new Vector3(transform.position.x, transform.position.y, boundsMin.z);
-            velocity.z = Mathf.Abs(velocity.z); // Apply a gentle force to move it inside
-        }
-        if (transform.position.z > boundsMax.z)
-        {
-            transform.position = new Vector3(transform.position.x, transform.position.y, boundsMax.z);
-            velocity.z = -Mathf.Abs(velocity.z); // Apply a gentle force to move it inside
-        }
+        float val = Mathf.Max(0, smoothingRadius * smoothingRadius - dist * dist);
+        return val * val * val / (Mathf.PI * Mathf.Pow(smoothingRadius, 8));
     }
 }
