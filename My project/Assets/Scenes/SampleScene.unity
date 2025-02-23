@@ -324,7 +324,7 @@ Transform:
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalPosition: {x: 0, y: 1, z: -20}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -561,6 +561,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: efe3123f82693814c9b0cfc46a507c27, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  moveSpeed: 5
+  vacuumRadius: 4
+  vacuumStrength: 15
+  vortexSpawnInterval: 0.5
+  baseSwirlStrength: 5
+  vortexLifetime: 3
+  vortexRadius: 2
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

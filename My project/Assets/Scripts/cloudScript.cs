@@ -4,8 +4,8 @@ using UnityEngine;
 public class cloudScript : MonoBehaviour
 {
     public GameObject AirElementCloneTemplate;
-    int dim = 6;
-    float smoothingRadius = 3;
+    int dim = 4;
+    float cubeSize = 2.5f; // Environment size
     Vector3 boundsMin, boundsMax;
     List<GameObject> airElements = new List<GameObject>();
 
@@ -17,7 +17,6 @@ public class cloudScript : MonoBehaviour
 
     private void GenerateCloud()
     {
-        float cubeSize = 10.0f;
         boundsMin = new Vector3(-cubeSize / 2, -cubeSize / 2, -cubeSize / 2);
         boundsMax = new Vector3(cubeSize / 2, cubeSize / 2, cubeSize / 2);
 
@@ -47,9 +46,9 @@ public class cloudScript : MonoBehaviour
         {
             float screenDistance = Mathf.Abs(mainCamera.transform.position.z - transform.position.z);
             Vector3 centerPoint = mainCamera.ViewportToWorldPoint(new Vector3(0.5f, 0.5f, screenDistance));
-            float cubeSize = 10.0f;
-            boundsMin = centerPoint - new Vector3(cubeSize / 2, cubeSize / 2, cubeSize / 2);
-            boundsMax = centerPoint + new Vector3(cubeSize / 2, cubeSize / 2, cubeSize / 2);
+            float size = cubeSize; // Use same cubeSize here
+            boundsMin = centerPoint - new Vector3(size / 2, size / 2, size / 2);
+            boundsMax = centerPoint + new Vector3(size / 2, size / 2, size / 2);
         }
     }
 }
