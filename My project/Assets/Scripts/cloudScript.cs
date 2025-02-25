@@ -4,8 +4,8 @@ using UnityEngine;
 public class cloudScript : MonoBehaviour
 {
     public GameObject AirElementCloneTemplate;
-    int dim = 4;
-    float cubeSize = 2.5f; // Environment size
+    int dim = 6;
+    float cubeSize = 2.5f;
     Vector3 boundsMin, boundsMax;
     List<GameObject> airElements = new List<GameObject>();
 
@@ -15,7 +15,7 @@ public class cloudScript : MonoBehaviour
         CalculateBounds();
     }
 
-    private void GenerateCloud()
+    void GenerateCloud()
     {
         boundsMin = new Vector3(-cubeSize / 2, -cubeSize / 2, -cubeSize / 2);
         boundsMax = new Vector3(cubeSize / 2, cubeSize / 2, cubeSize / 2);
@@ -26,29 +26,28 @@ public class cloudScript : MonoBehaviour
             {
                 for (int k = 0; k < dim; k++)
                 {
-                    Vector3 randomPosition = new Vector3(
+                    Vector3 pos = new Vector3(
                         Random.Range(boundsMin.x, boundsMax.x),
                         Random.Range(boundsMin.y, boundsMax.y),
                         Random.Range(boundsMin.z, boundsMax.z)
                     );
-
-                    GameObject airElement = Instantiate(AirElementCloneTemplate, randomPosition, Quaternion.identity);
-                    airElements.Add(airElement);
+                    GameObject a = Instantiate(AirElementCloneTemplate, pos, Quaternion.identity);
+                    airElements.Add(a);
                 }
             }
         }
     }
 
-    private void CalculateBounds()
+    void CalculateBounds()
     {
-        Camera mainCamera = Camera.main;
-        if (mainCamera != null)
+        Camera cam = Camera.main;
+        if (cam)
         {
-            float screenDistance = Mathf.Abs(mainCamera.transform.position.z - transform.position.z);
-            Vector3 centerPoint = mainCamera.ViewportToWorldPoint(new Vector3(0.5f, 0.5f, screenDistance));
-            float size = cubeSize; // Use same cubeSize here
-            boundsMin = centerPoint - new Vector3(size / 2, size / 2, size / 2);
-            boundsMax = centerPoint + new Vector3(size / 2, size / 2, size / 2);
+            float d = Mathf.Abs(cam.transform.position.z - transform.position.z);
+            Vector3 c = cam.ViewportToWorldPoint(new Vector3(0.5f, 0.5f, d));
+            float s = cubeSize;
+            boundsMin = c - new Vector3(s / 2, s / 2, s / 2);
+            boundsMax = c + new Vector3(s / 2, s / 2, s / 2);
         }
     }
 }
