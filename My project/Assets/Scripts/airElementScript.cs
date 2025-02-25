@@ -27,6 +27,9 @@ public class airElementScript : MonoBehaviour
     private const float maxVelocity = 50f;
     private Vector3 boundsMin, boundsMax;
 
+    // NEW: damping factor for natural slowing when undisturbed
+    [SerializeField] private float dampingFactor = 0.98f;
+
     internal void Start()
     {
         CalculateBounds();
@@ -156,6 +159,9 @@ public class airElementScript : MonoBehaviour
         velocity += acceleration * Time.deltaTime;
         transform.position += velocity * Time.deltaTime;
 
+        // NEW: Apply damping to simulate random slowing
+        velocity *= dampingFactor;
+
         // 6) Safety checks
         if (IsInvalid(velocity))
         {
@@ -244,4 +250,5 @@ public class airElementScript : MonoBehaviour
             }
         }
     }
+
 }

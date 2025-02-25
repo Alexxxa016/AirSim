@@ -8,14 +8,14 @@ public class controlableElement : airElementScript
 
     [Header("Movement & Vacuum")]
     public float moveSpeed = 5f;
-    public float vacuumRadius = 6f;     // how far behind it pulls
-    public float vacuumStrength = 0.8f;  // how strong the pull is
-    private float vacuumFalloff = 0.8f;   // how quickly it fades with distance
+    public float vacuumRadius = 6f;     // How far behind it pulls
+    public float vacuumStrength = 0.8f;   // How strong the pull is
+    private float vacuumFalloff = 0.8f;   // How quickly it fades with distance
 
     [Header("Vortex Centers (Optional)")]
     public List<VortexCenter> vortexCenters = new List<VortexCenter>();
-    public float vortexSpawnInterval = 0.5f;
-    public float baseSwirlStrength = 5f;
+    public float vortexSpawnInterval = 0.3f;  // Spawn vortex centers a bit more frequently
+    public float baseSwirlStrength = 8f;      // Slightly stronger swirl
     public float vortexLifetime = 3f;
     public float vortexRadius = 2f;
     private float vortexSpawnTimer;
@@ -39,7 +39,7 @@ public class controlableElement : airElementScript
         // 1) Move with arrow keys
         HandleMovement();
 
-        // 2) Vacuum effect behind the object (low-pressure zone)
+        // 2) Vacuum effect behind the object (low-pressure zone) with drag-along effect
         ApplyVacuumEffect();
 
         // 3) (Optional) aerodynamic forces
@@ -48,7 +48,7 @@ public class controlableElement : airElementScript
         // 4) Base update (pressure, collisions, etc.)
         base.Update();
 
-        // 5) (Optional) spawn vortex centers for swirling effect
+        // 5) Spawn vortex centers for swirling effect
         vortexSpawnTimer += Time.deltaTime;
         if (vortexSpawnTimer >= vortexSpawnInterval)
         {
@@ -79,9 +79,9 @@ public class controlableElement : airElementScript
 
     void ApplyVacuumEffect()
     {
-        // We'll define a "vacuum zone" behind the object
+        // Define a vacuum zone behind the object.
         Collider[] colliders = Physics.OverlapSphere(transform.position, vacuumRadius * 2f);
-        // The vacuum target is behind the object
+        // The vacuum target is behind the object.
         Vector3 vacuumTarget = transform.position - velocity.normalized * 1.0f;
 
         foreach (Collider c in colliders)
@@ -92,20 +92,28 @@ public class controlableElement : airElementScript
                 Vector3 relativePos = particle.transform.position - transform.position;
                 float dist = relativePos.magnitude;
 
-                // Only affect particles behind the object
+                // Only affect particles that are behind the object.
                 if (Vector3.Dot(relativePos, -velocity.normalized) > 0)
                 {
-                    // Calculate how strong the pull is based on distance
+                    // Existing pull effect.
                     float falloff = Mathf.Lerp(vacuumStrength, 0f, dist / (vacuumRadius * vacuumFalloff));
-                    // Pull direction is from the particle to the vacuum target
                     Vector3 pullDir = (vacuumTarget - particle.transform.position).normalized;
                     Vector3 pullForce = pullDir * falloff;
-
-                    // Lerp the particle velocity for a smooth pull
                     particle.velocity = Vector3.Lerp(
                         particle.velocity,
                         particle.velocity + pullForce,
                         Time.deltaTime * 8f
+                    );
+                }
+
+                // NEW: If a particle is close enough to the controllable,
+                // gently drag it along by interpolating its velocity toward the controllable's velocity.
+                if (dist < vacuumRadius * 0.5f)
+                {
+                    particle.velocity = Vector3.Lerp(
+                        particle.velocity,
+                        velocity,
+                        Time.deltaTime * 4f // Adjust this factor to change the dragging strength.
                     );
                 }
             }
@@ -120,7 +128,7 @@ public class controlableElement : airElementScript
 
         // Basic lift
         Vector3 flowDir = velocity.normalized;
-        Vector3 liftDir = Vector3.Cross(flowDir, Vector3.forward).normalized;
+        Vector3 liftDir = Vector3.Cross(flowDir, Vector3.forward).normalized; // 3D cross product (swirl around z)
         Vector3 liftForce = liftDir * 0.5f * liftCoefficient * fluidDensity * velocity.sqrMagnitude * crossSectionalArea;
         acceleration += liftForce / mass;
     }
@@ -136,7 +144,6 @@ public class controlableElement : airElementScript
     }
 }
 
-// Data class for swirl centers
 public class VortexCenter
 {
     public Vector3 position;

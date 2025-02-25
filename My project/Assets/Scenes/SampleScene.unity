@@ -144,6 +144,18 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8996336699956409996, guid: 3a62b0f6b5abae0448898c5771691c2d, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8996336699956409996, guid: 3a62b0f6b5abae0448898c5771691c2d, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8996336699956409996, guid: 3a62b0f6b5abae0448898c5771691c2d, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8996336699956409996, guid: 3a62b0f6b5abae0448898c5771691c2d, type: 3}
       propertyPath: m_LocalPosition.x
       value: 9.600392
       objectReference: {fileID: 0}
@@ -561,11 +573,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: efe3123f82693814c9b0cfc46a507c27, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  dampingFactor: 0.98
   moveSpeed: 5
-  vacuumRadius: 4
-  vacuumStrength: 15
-  vortexSpawnInterval: 0.5
-  baseSwirlStrength: 5
+  vacuumRadius: 6
+  vacuumStrength: 0.8
+  vortexSpawnInterval: 0.3
+  baseSwirlStrength: 8
   vortexLifetime: 3
   vortexRadius: 2
 --- !u!1660057539 &9223372036854775807
