@@ -1,2 +1,12 @@
 fileFormatVersion: 2
 guid: e70d476667503404d96462a90cc8cfa4
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - AirElementCloneTemplate: {fileID: 3794265957456544852, guid: 3a62b0f6b5abae0448898c5771691c2d, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

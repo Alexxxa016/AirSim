@@ -1,4 +1,5 @@
 using UnityEngine;
+using static controlableElement;
 
 public class airElementScript : MonoBehaviour
 {
@@ -10,7 +11,7 @@ public class airElementScript : MonoBehaviour
     private const float collisionRadius = 0.5f;
     private const float edgeRepellingForceStrength = 0.1f;
     private const float attractionStrength = 0f;  // No attraction
-    private const float repulsionStrength = 0.3f; // Even stronger repulsion
+    private const float repulsionStrength = 0.3f;   // Even stronger repulsion
     private const float intermolecularDistance = 2.0f;
     private const float pressureMultiplier = 1f;
     private const float targetDensity = 0.5f;
@@ -27,17 +28,51 @@ public class airElementScript : MonoBehaviour
     private const float maxVelocity = 50f;
     private Vector3 boundsMin, boundsMax;
 
-    // NEW: damping factor for natural slowing when undisturbed
+    internal bool isControllable = false;
+    int myIndex;
+    private cloudScript theCloud;
+
+    // Damping factor for natural slowing when undisturbed
     [SerializeField] private float dampingFactor = 0.98f;
+
+    // Preallocated buffers for non-allocating overlap sphere queries:
+    private Collider[] overlapBufferSmall = new Collider[32];   // for collision queries
+    private Collider[] overlapBufferLarge = new Collider[64];     // for smoothing/density queries
+
+    // Cached main camera reference
+    private Camera mainCamera;
+
+    // Precomputed constant denominator for smoothing kernels using smoothingRadius
+    private float smoothingDenom;
+
+    // Random jitter caching to reduce frequent Random.insideUnitSphere calls
+    private Vector3[] randomJitterCache;
+    private int randomIndex = 0;
+    private const int randomCacheSize = 100;
+
+    // Density update frequency
+    private float densityUpdateTimer = 0f;
+    private const float densityUpdateInterval = 0.05f; // seconds
+
+    internal void Awake()
+    {
+        mainCamera = Camera.main;
+        smoothingDenom = Mathf.PI * Mathf.Pow(smoothingRadius, 8);
+        randomJitterCache = new Vector3[randomCacheSize];
+        for (int i = 0; i < randomCacheSize; i++)
+        {
+            randomJitterCache[i] = Random.insideUnitSphere * 0.05f;
+        }
+    }
 
     internal void Start()
     {
         CalculateBounds();
+      
     }
 
     void CalculateBounds()
     {
-        Camera mainCamera = Camera.main;
         if (mainCamera != null)
         {
             float screenDistance = Mathf.Abs(mainCamera.transform.position.z - transform.position.z);
@@ -48,12 +83,14 @@ public class airElementScript : MonoBehaviour
         }
     }
 
-    Vector3 CalculatePressureForce()
+    // Combined computation for pressure force and intermolecular (repulsion) force.
+    Vector3 ComputeSmoothingForces(int count)
     {
         Vector3 pressureForce = Vector3.zero;
-        Collider[] colliders = Physics.OverlapSphere(transform.position, smoothingRadius);
-        foreach (Collider c in colliders)
+        Vector3 intermolecularForce = Vector3.zero;
+        for (int i = 0; i < count; i++)
         {
+            Collider c = overlapBufferLarge[i];
             if (c.gameObject == gameObject) continue;
             float dist = Vector3.Distance(c.transform.position, transform.position);
             if (dist > 0)
@@ -63,9 +100,15 @@ public class airElementScript : MonoBehaviour
                 float otherDensity = Mathf.Max(DensityAt(c.transform.position), minDensity);
                 float sharedPressure = (ConvertDensityToPressure(otherDensity) + ConvertDensityToPressure(density)) / 2f;
                 pressureForce += sharedPressure * dir * slope * mass / otherDensity;
+
+                if (dist < intermolecularDistance)
+                {
+                    Vector3 repulsionForce = -dir * repulsionStrength / (dist * dist);
+                    intermolecularForce += repulsionForce;
+                }
             }
         }
-        return pressureForce;
+        return pressureForce + intermolecularForce;
     }
 
     float ConvertDensityToPressure(float d)
@@ -78,14 +121,15 @@ public class airElementScript : MonoBehaviour
     {
         if (dist >= radius) return 0f;
         float f = radius * radius - dist * dist;
-        return -24f * dist * f * f / (Mathf.PI * Mathf.Pow(radius, 8));
+        return -24f * dist * f * f / smoothingDenom;
     }
 
     void ResolveCollisions()
     {
-        Collider[] colliders = Physics.OverlapSphere(transform.position, collisionRadius);
-        foreach (Collider c in colliders)
+        int count = Physics.OverlapSphereNonAlloc(transform.position, collisionRadius, overlapBufferSmall);
+        for (int i = 0; i < count; i++)
         {
+            Collider c = overlapBufferSmall[i];
             if (c.gameObject == gameObject) continue;
             float dist = Vector3.Distance(c.transform.position, transform.position);
             if (dist < collisionRadius && dist > 0)
@@ -94,35 +138,18 @@ public class airElementScript : MonoBehaviour
                 float overlap = collisionRadius - dist;
                 transform.position += dir * overlap * 0.7f;
                 velocity = Vector3.Lerp(velocity, velocity + dir * overlap * 3f, Time.deltaTime * 3f);
-                // random jitter
-                velocity += Random.insideUnitSphere * 0.05f;
-            }
-        }
-    }
-
-    void ApplyIntermolecularForces()
-    {
-        Collider[] colliders = Physics.OverlapSphere(transform.position, smoothingRadius);
-        foreach (Collider c in colliders)
-        {
-            if (c.gameObject == gameObject) continue;
-            Vector3 dir = c.transform.position - transform.position;
-            float dist = dir.magnitude;
-            if (dist < intermolecularDistance && dist > 0)
-            {
-                // repulsion only
-                Vector3 repulsionForce = -dir.normalized * repulsionStrength / (dist * dist);
-                velocity += repulsionForce * Time.deltaTime;
+                velocity += GetRandomJitter();
             }
         }
     }
 
     float DensityAt(Vector3 point)
     {
-        Collider[] colliders = Physics.OverlapSphere(point, smoothingRadius);
         float densitySum = 0f;
-        foreach (Collider c in colliders)
+        int count = Physics.OverlapSphereNonAlloc(point, smoothingRadius, overlapBufferLarge);
+        for (int i = 0; i < count; i++)
         {
+            Collider c = overlapBufferLarge[i];
             float dist = Vector3.Distance(c.transform.position, point);
             float influence = SmoothingKernel(smoothingRadius, dist);
             densitySum += influence;
@@ -133,36 +160,42 @@ public class airElementScript : MonoBehaviour
     float SmoothingKernel(float radius, float dist)
     {
         float val = Mathf.Max(0f, radius * radius - dist * dist);
-        return val * val * val / (Mathf.PI * Mathf.Pow(radius, 8));
+        return Mathf.Pow(val, 3) / smoothingDenom;
     }
 
     internal void Update()
     {
-        // 1) Pressure
-        acceleration = CalculatePressureForce();
+        int smoothingCount = Physics.OverlapSphereNonAlloc(transform.position, smoothingRadius, overlapBufferLarge);
+        Vector3 combinedSmoothingForce = ComputeSmoothingForces(smoothingCount);
+        acceleration = combinedSmoothingForce;
 
-        // 2) Drag
         Vector3 dragForce = -velocity.normalized * 0.5f * dragCoefficient * fluidDensity *
                             (velocity.magnitude * velocity.magnitude) * crossSectionalArea;
         acceleration += dragForce / mass;
 
-        // 3) Lift
         Vector3 liftDir = Vector3.Cross(velocity, Vector3.up).normalized;
         Vector3 liftForce = liftDir * 0.5f * liftCoefficient * fluidDensity *
                             (velocity.magnitude * velocity.magnitude) * crossSectionalArea;
         acceleration += liftForce / mass;
 
-        // 4) Swirl from vortex centers
         ApplyVortexCenters();
 
-        // 5) Update velocity & position
         velocity += acceleration * Time.deltaTime;
-        transform.position += velocity * Time.deltaTime;
+        Vector3 candidatePosition = transform.position + velocity * Time.deltaTime;
 
-        // NEW: Apply damping to simulate random slowing
+        if (!IsInvalid(candidatePosition))
+        {
+            transform.position = candidatePosition;
+        }
+        else
+        {
+            transform.position = Vector3.zero;
+            velocity = Vector3.zero;
+            acceleration = Vector3.zero;
+        }
+
         velocity *= dampingFactor;
 
-        // 6) Safety checks
         if (IsInvalid(velocity))
         {
             velocity = Vector3.zero;
@@ -179,13 +212,19 @@ public class airElementScript : MonoBehaviour
             acceleration = Vector3.zero;
         }
 
-        density = DensityAt(transform.position);
+        densityUpdateTimer += Time.deltaTime;
+        if (densityUpdateTimer >= densityUpdateInterval)
+        {
+            density = DensityAt(transform.position);
+            densityUpdateTimer = 0f;
+        }
 
-        // 7) Collisions, repulsion, etc.
         ResolveCollisions();
         KeepParticleWithinScreenView();
         ApplyEdgeRepellingForce();
-        ApplyIntermolecularForces();
+
+        if (!isControllable)
+            theCloud.myNewPositionIs(transform.position, myIndex);
     }
 
     bool IsInvalid(Vector3 v)
@@ -196,7 +235,6 @@ public class airElementScript : MonoBehaviour
 
     void KeepParticleWithinScreenView()
     {
-        Camera mainCamera = Camera.main;
         if (mainCamera != null)
         {
             float screenDistance = Mathf.Abs(mainCamera.transform.position.z - transform.position.z);
@@ -212,7 +250,6 @@ public class airElementScript : MonoBehaviour
 
     void ApplyEdgeRepellingForce()
     {
-        Camera mainCamera = Camera.main;
         if (mainCamera != null)
         {
             float screenDistance = Mathf.Abs(mainCamera.transform.position.z - transform.position.z);
@@ -240,7 +277,6 @@ public class airElementScript : MonoBehaviour
             float dist = toCenter.magnitude;
             if (dist < vortex.radius)
             {
-                // swirl around forward axis (for XY swirl)
                 Vector3 swirlAxis = Vector3.forward;
                 Vector3 swirlDir = Vector3.Cross(toCenter, swirlAxis).normalized;
                 float closeness = 1f - (dist / vortex.radius);
@@ -251,4 +287,25 @@ public class airElementScript : MonoBehaviour
         }
     }
 
+    internal void yourPositionIs(int index, cloudScript cloudScript)
+    {
+        myIndex = index;
+        theCloud = cloudScript;
+    }
+
+    Vector3 GetRandomJitter()
+    {
+        if (randomJitterCache == null || randomJitterCache.Length == 0)
+        {
+            randomJitterCache = new Vector3[randomCacheSize];
+            for (int i = 0; i < randomCacheSize; i++)
+            {
+                randomJitterCache[i] = Random.insideUnitSphere * 0.05f;
+            }
+            randomIndex = 0;
+        }
+        Vector3 jitter = randomJitterCache[randomIndex];
+        randomIndex = (randomIndex + 1) % randomCacheSize;
+        return jitter;
+    }
 }

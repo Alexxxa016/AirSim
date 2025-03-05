@@ -21,6 +21,9 @@ public class controlableElement : airElementScript
     private float vortexSpawnTimer;
     private int swirlSign = 1;
 
+    // Preallocated buffer for vacuum effect non-alloc query
+    private Collider[] vacuumBuffer = new Collider[32];
+
     void Awake()
     {
         Instance = this;
@@ -28,6 +31,7 @@ public class controlableElement : airElementScript
 
     void Start()
     {
+        isControllable = true;
         base.Start();
         // Make it visibly red
         Renderer rend = GetComponent<Renderer>();
@@ -79,23 +83,23 @@ public class controlableElement : airElementScript
 
     void ApplyVacuumEffect()
     {
-        // Define a vacuum zone behind the object.
-        Collider[] colliders = Physics.OverlapSphere(transform.position, vacuumRadius * 2f);
+        // Use non-alloc query for vacuum effect.
+        int count = Physics.OverlapSphereNonAlloc(transform.position, vacuumRadius * 2f, vacuumBuffer);
         // The vacuum target is behind the object.
         Vector3 vacuumTarget = transform.position - velocity.normalized * 1.0f;
 
-        foreach (Collider c in colliders)
+        for (int i = 0; i < count; i++)
         {
+            Collider c = vacuumBuffer[i];
             airElementScript particle = c.GetComponent<airElementScript>();
             if (particle != null && particle != this)
             {
                 Vector3 relativePos = particle.transform.position - transform.position;
                 float dist = relativePos.magnitude;
 
-                // Only affect particles that are behind the object.
+                // Only affect particles behind this object.
                 if (Vector3.Dot(relativePos, -velocity.normalized) > 0)
                 {
-                    // Existing pull effect.
                     float falloff = Mathf.Lerp(vacuumStrength, 0f, dist / (vacuumRadius * vacuumFalloff));
                     Vector3 pullDir = (vacuumTarget - particle.transform.position).normalized;
                     Vector3 pullForce = pullDir * falloff;
@@ -106,14 +110,13 @@ public class controlableElement : airElementScript
                     );
                 }
 
-                // NEW: If a particle is close enough to the controllable,
-                // gently drag it along by interpolating its velocity toward the controllable's velocity.
+                // If a particle is close enough, gently drag it along.
                 if (dist < vacuumRadius * 0.5f)
                 {
                     particle.velocity = Vector3.Lerp(
                         particle.velocity,
                         velocity,
-                        Time.deltaTime * 4f // Adjust this factor to change the dragging strength.
+                        Time.deltaTime * 4f
                     );
                 }
             }
@@ -122,40 +125,41 @@ public class controlableElement : airElementScript
 
     void ApplyAerodynamicForces()
     {
-        // Basic drag
+        // Basic drag.
         Vector3 dragForce = -velocity.normalized * 0.5f * dragCoefficient * fluidDensity * velocity.sqrMagnitude * crossSectionalArea;
         acceleration += dragForce / mass;
 
-        // Basic lift
+        // Basic lift (swirl around z-axis).
         Vector3 flowDir = velocity.normalized;
-        Vector3 liftDir = Vector3.Cross(flowDir, Vector3.forward).normalized; // 3D cross product (swirl around z)
+        Vector3 liftDir = Vector3.Cross(flowDir, Vector3.forward).normalized;
         Vector3 liftForce = liftDir * 0.5f * liftCoefficient * fluidDensity * velocity.sqrMagnitude * crossSectionalArea;
         acceleration += liftForce / mass;
     }
 
     void SpawnVortexCenter()
     {
-        // Spawn behind the object
+        // Spawn vortex center behind the controllable element.
         Vector3 spawnPos = transform.position - velocity.normalized * 1f;
         float swirl = baseSwirlStrength * swirlSign;
         swirlSign *= -1;
         VortexCenter v = new VortexCenter(spawnPos, swirl, vortexRadius, vortexLifetime);
         vortexCenters.Add(v);
     }
-}
 
-public class VortexCenter
-{
-    public Vector3 position;
-    public float swirlStrength;
-    public float radius;
-    public float lifetime;
-
-    public VortexCenter(Vector3 pos, float swirl, float rad, float life)
+    // At the end of controlableElement, we define VortexCenter.
+    public class VortexCenter
     {
-        position = pos;
-        swirlStrength = swirl;
-        radius = rad;
-        lifetime = life;
+        public Vector3 position;
+        public float swirlStrength;
+        public float radius;
+        public float lifetime;
+
+        public VortexCenter(Vector3 pos, float swirl, float rad, float life)
+        {
+            position = pos;
+            swirlStrength = swirl;
+            radius = rad;
+            lifetime = life;
+        }
     }
 }

@@ -9,9 +9,12 @@ public class cloudScript : MonoBehaviour
     Vector3 boundsMin, boundsMax;
     List<GameObject> airElements = new List<GameObject>();
 
+    internal Vector3[] allPos;
     void Start()
     {
+        allPos = new Vector3[dim * dim * dim];
         GenerateCloud();
+
         CalculateBounds();
     }
 
@@ -19,7 +22,7 @@ public class cloudScript : MonoBehaviour
     {
         boundsMin = new Vector3(-cubeSize / 2, -cubeSize / 2, -cubeSize / 2);
         boundsMax = new Vector3(cubeSize / 2, cubeSize / 2, cubeSize / 2);
-
+        int index = 0;
         for (int i = 0; i < dim; i++)
         {
             for (int j = 0; j < dim; j++)
@@ -32,6 +35,12 @@ public class cloudScript : MonoBehaviour
                         Random.Range(boundsMin.z, boundsMax.z)
                     );
                     GameObject a = Instantiate(AirElementCloneTemplate, pos, Quaternion.identity);
+                    airElementScript newAirElement = a.GetComponent<airElementScript>();
+                    if (newAirElement != null)
+                    {
+                        newAirElement.yourPositionIs(index, this);
+                    }
+                    index++;
                     airElements.Add(a);
                 }
             }
@@ -49,5 +58,15 @@ public class cloudScript : MonoBehaviour
             boundsMin = c - new Vector3(s / 2, s / 2, s / 2);
             boundsMax = c + new Vector3(s / 2, s / 2, s / 2);
         }
+    }
+
+    internal Vector3[] getpositions()
+    {
+        return allPos;
+    }
+
+    internal void myNewPositionIs(Vector3 position, int myIndex)
+    {
+        allPos[myIndex] = position;
     }
 }
