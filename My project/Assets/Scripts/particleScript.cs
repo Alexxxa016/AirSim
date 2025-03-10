@@ -12,12 +12,12 @@ public class particleScript : MonoBehaviour
     private Particle[] particles;
     private NativeArray<Particle> particleArray;
     private NativeArray<Vector3> positionalArray;
-    private int numberOfParticles = 6 * 6 * 6;
+    private int numberOfParticles = 4 * 4 * 4;
 
     void Start()
     {
         ps = GetComponent<ParticleSystem>();
-        cloud = FindObjectOfType<cloudScript>();
+        cloud = cloudScript.Instance;
         var mainModule = ps.main;
         mainModule.maxParticles = numberOfParticles;
 
@@ -25,9 +25,10 @@ public class particleScript : MonoBehaviour
         for (int i = 0; i < numberOfParticles; i++)
         {
             particles[i] = new Particle();
-            // Example initialization:
-            particles[i].position = new Vector3(Random.Range(-10f, 10f), Random.Range(-10f, 10f), Random.Range(-10f, 10f));
-            particles[i].startLifetime = 20f;
+            particles[i].position = new Vector3(Random.Range(-10f, 10f),
+                                                Random.Range(-10f, 10f),
+                                                Random.Range(-10f, 10f));
+            particles[i].startLifetime = 200f;
             particles[i].remainingLifetime = particles[i].startLifetime;
             particles[i].velocity = Vector3.zero;
             particles[i].startSize3D = 0.1f * Vector3.one;
@@ -42,11 +43,9 @@ public class particleScript : MonoBehaviour
     void Update()
     {
         int numParticlesAlive = ps.GetParticles(particles);
-        print(numParticlesAlive);
-        // Copy particle data to NativeArray
         particleArray.CopyFrom(particles);
-        positionalArray.CopyFrom(cloud.getpositions());
-        // Create and schedule the job
+        positionalArray.CopyFrom(cloud.allPos);
+
         MyParticleJob job = new MyParticleJob
         {
             particleData = particleArray,
@@ -57,7 +56,6 @@ public class particleScript : MonoBehaviour
         JobHandle handle = job.Schedule(numParticlesAlive, 64);
         handle.Complete();
 
-        // Copy modified data back to the particle system
         particleArray.CopyTo(particles);
         ps.SetParticles(particles, numParticlesAlive);
     }
@@ -71,16 +69,15 @@ public class particleScript : MonoBehaviour
         public void Execute(int index)
         {
             Particle p = particleData[index];
-            // Example: update particle position based on global object positions.
             p.position = GOPosData[index];
-            p.velocity = Vector3.zero;
+            p.velocity = Vector3.zero; // reset velocity for visualization
             particleData[index] = p;
         }
     }
 
     void OnDisable()
     {
-        particleArray.Dispose();
-        positionalArray.Dispose();
+        if (particleArray.IsCreated) particleArray.Dispose();
+        if (positionalArray.IsCreated) positionalArray.Dispose();
     }
 }
