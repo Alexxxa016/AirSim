@@ -12,7 +12,6 @@ public class spatialHash
         hashGrid = new Dictionary<Vector3Int, List<Vector3>>();
     }
 
-    // Compute cell index for a position.
     private Vector3Int Hash(Vector3 position)
     {
         int x = Mathf.FloorToInt(position.x / cellSize);
@@ -21,7 +20,6 @@ public class spatialHash
         return new Vector3Int(x, y, z);
     }
 
-    // Insert an array of elements.
     public void Insert(Vector3[] elements)
     {
         foreach (var elem in elements)
@@ -36,7 +34,6 @@ public class spatialHash
         }
     }
 
-    // Update the hash using current positions.
     public void UpdateHash(IEnumerable<Vector3> elements)
     {
         hashGrid.Clear();
@@ -52,7 +49,6 @@ public class spatialHash
         }
     }
 
-    // Query nearby elements.
     public void Query(Vector3 position, float radius, List<Vector3> result)
     {
         result.Clear();
@@ -77,10 +73,4 @@ public class spatialHash
             }
         }
     }
-
-    // For debugging: number of cells.
-    //public int GetCellCount()
-    //{
-    //    return hashGrid.Count;
-    //}
 }
