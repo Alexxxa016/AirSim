@@ -12,7 +12,7 @@ public class particleScript : MonoBehaviour
     private Particle[] particles;
     private NativeArray<Particle> particleArray;
     private NativeArray<Vector3> positionalArray;
-    private int numberOfParticles = 4 * 4 * 4;
+    private int numberOfParticles = 6 * 6 * 6;
 
     void Start()
     {
@@ -70,7 +70,7 @@ public class particleScript : MonoBehaviour
         {
             Particle p = particleData[index];
             p.position = GOPosData[index];
-            p.velocity = Vector3.zero; // reset velocity for visualization
+            p.velocity = Vector3.zero; // Reset velocity for visualization.
             particleData[index] = p;
         }
     }
