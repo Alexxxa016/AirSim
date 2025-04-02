@@ -29,7 +29,7 @@ public class cloudScript : MonoBehaviour
 
     // Smoothing & Pressure settings
     [SerializeField]
-    private const float smoothingRadius = 1.5f;
+    private const float smoothingRadius = 1.2f;
     [SerializeField]
     private const float collisionRadius = 0.2f;
     [SerializeField]
@@ -39,7 +39,7 @@ public class cloudScript : MonoBehaviour
     [SerializeField]
     private const float intermolecularDistance = 0.5f;
     [SerializeField]
-    private const float pressureMultiplier = 5f;
+    private const float pressureMultiplier = 1f;
     [SerializeField]
     private const float targetDensity = 0.5f;
     internal const float mass = 1f;
@@ -52,13 +52,14 @@ public class cloudScript : MonoBehaviour
     internal float density = 0f; // Global density (optional)
 
     // Damping and velocity limit
-    private float dampingFactor = 0.98f;
+    private float dampingFactor = 0.995f;
     private const float maxVelocity = 50f;
 
     // Density update timer
     private float densityUpdateTimer = 0f;
     private const float densityUpdateInterval = 0.1f;
 
+    sphereScript wing;
     // (Aerodynamic forces removed)
     // internal float dragCoefficient = 0.47f;
     // internal float liftCoefficient = 0.2f;
@@ -68,12 +69,13 @@ public class cloudScript : MonoBehaviour
 
     void Awake()
     {
+        wing = FindObjectOfType<sphereScript>();
         Instance = this;
         smoothingDenom = Mathf.PI * Mathf.Pow(smoothingRadius, 8);
         randomJitterCache = new Vector3[randomCacheSize];
         for (int i = 0; i < randomCacheSize; i++)
         {
-            randomJitterCache[i] = Random.insideUnitSphere * 0.05f;
+            randomJitterCache[i] = Random.insideUnitSphere * 0.001f;
         }
     }
 
@@ -97,6 +99,8 @@ public class cloudScript : MonoBehaviour
 
     void Update()
     {
+        Vector3 wingpos = wing.transform.position;
+        float wingradius = wing.Radius;
         // Update spatial hash periodically.
         updateHashTimer += Time.deltaTime;
         if (updateHashTimer >= updateHashInterval)
@@ -145,7 +149,7 @@ public class cloudScript : MonoBehaviour
                 densityUpdateTimer = 0f;
             }
 
-            ResolveCollisions(i);
+            ResolveCollisions(i,wingpos, wingradius);
             KeepParticleWithinContainer(i);
             ApplyEdgeRepellingForce(i);
         }
@@ -154,6 +158,7 @@ public class cloudScript : MonoBehaviour
     void GenerateCloud()
     {
         int index = 0;
+
         for (int i = 0; i < dim; i++)
         {
             for (int j = 0; j < dim; j++)
@@ -190,14 +195,26 @@ public class cloudScript : MonoBehaviour
     }
 
     // Collision resolution: gently separate overlapping particles.
-    void ResolveCollisions(int index)
+    void ResolveCollisions(int index, Vector3 wingpos, float wingradius)
     {
+        // First, resolve collision with the moving sphere (wing)
+        float distToWing = Vector3.Distance(allPos[index], wingpos);
+        if (distToWing < wingradius && distToWing > 0f)
+        {
+            Vector3 dir = (allPos[index] - wingpos).normalized;
+            float overlap = (wingradius - distToWing) * 1f;
+            allPos[index] += dir * overlap;
+            velocities[index] = Vector3.Lerp(velocities[index], velocities[index] + dir * overlap * 3f, Time.deltaTime * 3f);
+            velocities[index] += GetRandomJitter();
+        }
+
+        // Next, resolve collisions with neighboring particles
         List<Vector3> neighbors = new List<Vector3>();
         spatialHashInstance.Query(allPos[index], collisionRadius, neighbors);
         foreach (var neighbor in neighbors)
         {
             float dist = Vector3.Distance(neighbor, allPos[index]);
-            if (dist < collisionRadius && dist > 0)
+            if (dist < collisionRadius && dist > 0f)
             {
                 Vector3 dir = (allPos[index] - neighbor).normalized;
                 float overlap = (collisionRadius - dist) * 0.7f;
@@ -207,6 +224,7 @@ public class cloudScript : MonoBehaviour
             }
         }
     }
+
 
     // Smoothing kernel (poly6-like) for density estimation.
     float SmoothingKernel(float radius, float dist)
@@ -227,6 +245,8 @@ public class cloudScript : MonoBehaviour
     float ConvertDensityToPressure(float d)
     {
         float densityError = d - targetDensity;
+        if (Mathf.Abs(densityError) < 0.05f) // adjust threshold as needed
+            return 0f;
         return densityError * pressureMultiplier;
     }
 
@@ -263,7 +283,7 @@ public class cloudScript : MonoBehaviour
                 densityGradient += dir * (localDensity - neighborDensity);
             }
         }
-        float diffusionCoefficient = 0.3f; // Adjust to increase/decrease diffusion strength.
+        float diffusionCoefficient = 0.1f; // Adjust to increase/decrease diffusion strength.
         Vector3 diffusionForce = diffusionCoefficient * densityGradient;
         return pressureForce + diffusionForce;
     }
