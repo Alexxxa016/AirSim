@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class controlableElement : airElementScript
+public class controlableElement : cloudScript
 {
 
 }

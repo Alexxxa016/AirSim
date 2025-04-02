@@ -31,7 +31,7 @@ public class particleScript : MonoBehaviour
             particles[i].startLifetime = 200f;
             particles[i].remainingLifetime = particles[i].startLifetime;
             particles[i].velocity = Vector3.zero;
-            particles[i].startSize3D = 0.1f * Vector3.one;
+            particles[i].startSize3D = 0.2f * Vector3.one;
         }
 
         ps.SetParticles(particles, numberOfParticles);
