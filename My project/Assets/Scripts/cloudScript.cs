@@ -12,8 +12,6 @@ public class cloudScript : MonoBehaviour
     Vector3 boundsMin, boundsMax;
 
     internal Vector3[] allPos, velocities, accelerations;
-    // internal airElementScript[] airElementScripts;
-
     public spatialHash spatialHashInstance;
     [SerializeField]
     public float spatialCellSize = 3f;
@@ -60,12 +58,6 @@ public class cloudScript : MonoBehaviour
     private const float densityUpdateInterval = 0.1f;
 
     sphereScript wing;
-    // (Aerodynamic forces removed)
-    // internal float dragCoefficient = 0.47f;
-    // internal float liftCoefficient = 0.2f;
-    // internal float fluidDensity = 1.225f;
-    // internal float crossSectionalArea = 1.0f;
-    // internal float forceStrength = 5f;
 
     void Awake()
     {
@@ -99,8 +91,11 @@ public class cloudScript : MonoBehaviour
 
     void Update()
     {
+        // Get the updated sphere (wing) position, radius, and velocity.
         Vector3 wingpos = wing.transform.position;
         float wingradius = wing.Radius;
+        Vector3 wingVelocity = wing.CurrentVelocity;
+
         // Update spatial hash periodically.
         updateHashTimer += Time.deltaTime;
         if (updateHashTimer >= updateHashInterval)
@@ -149,7 +144,8 @@ public class cloudScript : MonoBehaviour
                 densityUpdateTimer = 0f;
             }
 
-            ResolveCollisions(i,wingpos, wingradius);
+            // Resolve collisions with the sphere (wing) using the sphere’s current velocity.
+            ResolveCollisions(i, wingpos, wingradius);
             KeepParticleWithinContainer(i);
             ApplyEdgeRepellingForce(i);
         }
@@ -158,7 +154,6 @@ public class cloudScript : MonoBehaviour
     void GenerateCloud()
     {
         int index = 0;
-
         for (int i = 0; i < dim; i++)
         {
             for (int j = 0; j < dim; j++)
@@ -170,7 +165,6 @@ public class cloudScript : MonoBehaviour
                         Random.Range(boundsMin.y, boundsMax.y),
                         Random.Range(boundsMin.z, boundsMax.z)
                     );
-
                     allPos[index] = pos;
                     index++;
                 }
@@ -194,7 +188,57 @@ public class cloudScript : MonoBehaviour
                float.IsInfinity(v.x) || float.IsInfinity(v.y) || float.IsInfinity(v.z);
     }
 
-    // Collision resolution: gently separate overlapping particles.
+    // Collision resolution updated to simulate:
+    // • Direct displacement (strong repulsion in front of the sphere)
+    // • Compression ahead (increased force for particles in the path)
+    // • Turbulent wake (softer repulsion with additional jitter behind)
+
+    //void ResolveCollisions(int index, Vector3 wingpos, float wingradius, Vector3 wingVelocity)
+    //{
+    //    float distToWing = Vector3.Distance(allPos[index], wingpos);
+    //    if (distToWing < wingradius && distToWing > 0f)
+    //    {
+    //        Debug.Log("Particle " + index + " within sphere. dist: " + distToWing);
+    //        Vector3 dir = (allPos[index] - wingpos).normalized;
+    //        float overlap = wingradius - distToWing;
+    //        // Determine relative location using the dot product:
+    //        float dot = Vector3.Dot(wingVelocity.normalized, dir);
+    //        if (dot > 0) // Particle is ahead/in front of the sphere's movement
+    //        {
+    //            // Stronger repulsion to simulate direct displacement and compression.
+    //            float forceMultiplier = 1.5f;
+    //            allPos[index] += dir * overlap * forceMultiplier;
+    //            velocities[index] = Vector3.Lerp(velocities[index], velocities[index] + dir * overlap * forceMultiplier * 3f, Time.deltaTime * 3f);
+    //        }
+    //        else // Particle is behind the sphere
+    //        {
+    //            // Weaker repulsion with extra jitter to simulate a turbulent wake.
+    //            float forceMultiplier = 0.8f;
+    //            allPos[index] += dir * overlap * forceMultiplier;
+    //            velocities[index] = Vector3.Lerp(velocities[index], velocities[index] + dir * overlap * forceMultiplier * 2f, Time.deltaTime * 3f);
+    //        }
+    //        // Add random jitter for smooth transition.
+    //        velocities[index] += GetRandomJitter();
+    //    }
+
+    //    // Resolve collisions with neighboring particles .
+    //    List<Vector3> neighbors = new List<Vector3>();
+    //    spatialHashInstance.Query(allPos[index], collisionRadius, neighbors);
+    //    foreach (var neighbor in neighbors)
+    //    {
+    //        float dist = Vector3.Distance(neighbor, allPos[index]);
+    //        if (dist < collisionRadius && dist > 0f)
+    //        {
+    //            Vector3 dir = (allPos[index] - neighbor).normalized;
+    //            float overlap = (collisionRadius - dist) * 0.7f;
+    //            allPos[index] += dir * overlap;
+    //            velocities[index] = Vector3.Lerp(velocities[index], velocities[index] + dir * overlap * 3f, Time.deltaTime * 3f);
+    //            velocities[index] += GetRandomJitter();
+    //        }
+    //    }
+    //}
+    //Collision resolution: gently separate overlapping particles.
+
     void ResolveCollisions(int index, Vector3 wingpos, float wingradius)
     {
         // First, resolve collision with the moving sphere (wing)
@@ -204,23 +248,25 @@ public class cloudScript : MonoBehaviour
             Vector3 dir = (allPos[index] - wingpos).normalized;
             float overlap = (wingradius - distToWing) * 1f;
             allPos[index] += dir * overlap;
-            velocities[index] = Vector3.Lerp(velocities[index], velocities[index] + dir * overlap * 3f, Time.deltaTime * 3f);
-            velocities[index] += GetRandomJitter();
+           // velocities[index] = Vector3.Lerp(velocities[index], velocities[index] + dir * overlap * 3f, Time.deltaTime * 3f);
+            velocities[index] =  velocities[index] + dir * overlap * 3f;
         }
-
-        // Next, resolve collisions with neighboring particles
-        List<Vector3> neighbors = new List<Vector3>();
-        spatialHashInstance.Query(allPos[index], collisionRadius, neighbors);
-        foreach (var neighbor in neighbors)
+        else
         {
-            float dist = Vector3.Distance(neighbor, allPos[index]);
-            if (dist < collisionRadius && dist > 0f)
+            // Next, resolve collisions with neighboring particles
+            List<Vector3> neighbors = new List<Vector3>();
+            spatialHashInstance.Query(allPos[index], collisionRadius, neighbors);
+            foreach (var neighbor in neighbors)
             {
-                Vector3 dir = (allPos[index] - neighbor).normalized;
-                float overlap = (collisionRadius - dist) * 0.7f;
-                allPos[index] += dir * overlap;
-                velocities[index] = Vector3.Lerp(velocities[index], velocities[index] + dir * overlap * 3f, Time.deltaTime * 3f);
-                velocities[index] += GetRandomJitter();
+                float dist = Vector3.Distance(neighbor, allPos[index]);
+                if (dist < collisionRadius && dist > 0f)
+                {
+                    Vector3 dir = (allPos[index] - neighbor).normalized;
+                    float overlap = (collisionRadius - dist) * 0.7f;
+                    allPos[index] += dir * overlap;
+                    velocities[index] = Vector3.Lerp(velocities[index], velocities[index] + dir * overlap * 3f, Time.deltaTime * 3f);
+                    velocities[index] += GetRandomJitter();
+                }
             }
         }
     }
@@ -245,7 +291,7 @@ public class cloudScript : MonoBehaviour
     float ConvertDensityToPressure(float d)
     {
         float densityError = d - targetDensity;
-        if (Mathf.Abs(densityError) < 0.05f) // adjust threshold as needed
+        if (Mathf.Abs(densityError) < 0.05f)
             return 0f;
         return densityError * pressureMultiplier;
     }
@@ -256,11 +302,10 @@ public class cloudScript : MonoBehaviour
         List<Vector3> neighbors = new List<Vector3>();
         spatialHashInstance.Query(allPos[index], smoothingRadius, neighbors);
 
-        // If no neighbors, return a random jitter to avoid stagnation.
         if (neighbors.Count == 0)
             return GetRandomJitter();
 
-        float localDensity = densities[index]; // use cached density
+        float localDensity = densities[index];
         float localPressure = ConvertDensityToPressure(localDensity);
 
         Vector3 pressureForce = Vector3.zero;
@@ -273,17 +318,15 @@ public class cloudScript : MonoBehaviour
             {
                 Vector3 dir = (allPos[index] - neighbor).normalized;
                 float slope = SmoothingKernelDerivative(dist, smoothingRadius);
-                // Try to find neighbor's density from cached values:
                 int neighborIndex = System.Array.IndexOf(allPos, neighbor);
                 float neighborDensity = (neighborIndex >= 0) ? densities[neighborIndex] : Mathf.Max(DensityAt(neighbor), minDensity);
                 float neighborPressure = ConvertDensityToPressure(neighborDensity);
                 float sharedPressure = (localPressure + neighborPressure) / 2f;
-                // Negative force: pushes from high-pressure areas.
                 pressureForce += -sharedPressure * dir * slope * mass / Mathf.Max(neighborDensity, minDensity);
                 densityGradient += dir * (localDensity - neighborDensity);
             }
         }
-        float diffusionCoefficient = 0.1f; // Adjust to increase/decrease diffusion strength.
+        float diffusionCoefficient = 0.1f;
         Vector3 diffusionForce = diffusionCoefficient * densityGradient;
         return pressureForce + diffusionForce;
     }
