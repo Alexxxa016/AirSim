@@ -188,56 +188,6 @@ public class cloudScript : MonoBehaviour
                float.IsInfinity(v.x) || float.IsInfinity(v.y) || float.IsInfinity(v.z);
     }
 
-    // Collision resolution updated to simulate:
-    // • Direct displacement (strong repulsion in front of the sphere)
-    // • Compression ahead (increased force for particles in the path)
-    // • Turbulent wake (softer repulsion with additional jitter behind)
-
-    //void ResolveCollisions(int index, Vector3 wingpos, float wingradius, Vector3 wingVelocity)
-    //{
-    //    float distToWing = Vector3.Distance(allPos[index], wingpos);
-    //    if (distToWing < wingradius && distToWing > 0f)
-    //    {
-    //        Debug.Log("Particle " + index + " within sphere. dist: " + distToWing);
-    //        Vector3 dir = (allPos[index] - wingpos).normalized;
-    //        float overlap = wingradius - distToWing;
-    //        // Determine relative location using the dot product:
-    //        float dot = Vector3.Dot(wingVelocity.normalized, dir);
-    //        if (dot > 0) // Particle is ahead/in front of the sphere's movement
-    //        {
-    //            // Stronger repulsion to simulate direct displacement and compression.
-    //            float forceMultiplier = 1.5f;
-    //            allPos[index] += dir * overlap * forceMultiplier;
-    //            velocities[index] = Vector3.Lerp(velocities[index], velocities[index] + dir * overlap * forceMultiplier * 3f, Time.deltaTime * 3f);
-    //        }
-    //        else // Particle is behind the sphere
-    //        {
-    //            // Weaker repulsion with extra jitter to simulate a turbulent wake.
-    //            float forceMultiplier = 0.8f;
-    //            allPos[index] += dir * overlap * forceMultiplier;
-    //            velocities[index] = Vector3.Lerp(velocities[index], velocities[index] + dir * overlap * forceMultiplier * 2f, Time.deltaTime * 3f);
-    //        }
-    //        // Add random jitter for smooth transition.
-    //        velocities[index] += GetRandomJitter();
-    //    }
-
-    //    // Resolve collisions with neighboring particles .
-    //    List<Vector3> neighbors = new List<Vector3>();
-    //    spatialHashInstance.Query(allPos[index], collisionRadius, neighbors);
-    //    foreach (var neighbor in neighbors)
-    //    {
-    //        float dist = Vector3.Distance(neighbor, allPos[index]);
-    //        if (dist < collisionRadius && dist > 0f)
-    //        {
-    //            Vector3 dir = (allPos[index] - neighbor).normalized;
-    //            float overlap = (collisionRadius - dist) * 0.7f;
-    //            allPos[index] += dir * overlap;
-    //            velocities[index] = Vector3.Lerp(velocities[index], velocities[index] + dir * overlap * 3f, Time.deltaTime * 3f);
-    //            velocities[index] += GetRandomJitter();
-    //        }
-    //    }
-    //}
-    //Collision resolution: gently separate overlapping particles.
 
     void ResolveCollisions(int index, Vector3 wingpos, float wingradius)
     {
